@@ -1,0 +1,960 @@
+You are acting as a senior TypeScript/Node.js engineer.
+
+Build a COMPLETE working project for me from scratch and deliver the final project as a ZIP file.
+
+Do not stop after giving instructions.
+Do not only provide code snippets.
+Do not ask me to manually create files one by one.
+Do not wait for confirmation between steps.
+
+Actually create all project files, install/verify dependencies where permitted, run the project, fix errors, test it, and package the final working project into a ZIP.
+
+==================================================
+PROJECT
+==================================================
+
+Name:
+
+m365-copilot-openai-bridge
+
+Goal:
+
+Create a LOCAL OpenAI-compatible API server that lets applications which support a custom OpenAI API Base URL communicate with my Microsoft 365 Copilot account.
+
+Target architecture:
+
+VS Code / AI client / OpenAI-compatible client
+            |
+            v
+http://127.0.0.1:4141/v1
+            |
+            v
+Local TypeScript bridge
+            |
+            v
+Microsoft Graph
+            |
+            v
+Microsoft 365 Copilot Chat API
+
+IMPORTANT:
+
+Use ONLY official Microsoft-supported APIs.
+
+Do NOT:
+- scrape Microsoft 365 Copilot web pages
+- reverse-engineer private Microsoft endpoints
+- extract browser cookies
+- steal or replay authentication tokens
+- bypass MFA
+- bypass Conditional Access
+- bypass corporate proxy/security controls
+- change npm to public registry if the machine is configured to use an internal Nexus
+- disable TLS verification
+- use NODE_TLS_REJECT_UNAUTHORIZED=0
+- clone GitHub repositories
+
+This is running on a corporate Windows 11 machine.
+
+==================================================
+ENVIRONMENT
+==================================================
+
+Assume:
+
+- Windows 11
+- Node.js installed
+- npm installed
+- npm may be configured to use an internal Nexus repository
+- GitHub cloning may be blocked
+- Microsoft 365 Copilot is available to my work account
+- My account authenticates through Microsoft Entra ID
+- MFA / Microsoft Authenticator may be required
+- Corporate HTTP/HTTPS proxy may be configured
+- I want everything to run locally
+
+First inspect:
+
+node -v
+npm -v
+npm config get registry
+npm config list
+
+Respect the existing npm registry configuration.
+
+Never replace it with registry.npmjs.org.
+
+If a required npm dependency is unavailable through the configured Nexus repository:
+
+1. try to implement the functionality using built-in Node.js APIs
+2. try an already available approved dependency
+3. if still impossible, clearly document the missing dependency in BLOCKERS.md
+
+Do not bypass Nexus.
+
+==================================================
+STEP 1 — VERIFY MICROSOFT API
+==================================================
+
+Before implementation, verify Microsoft's CURRENT official documentation for the Microsoft 365 Copilot Chat API.
+
+Use the current Microsoft Graph API documented by Microsoft.
+
+Expected API family is similar to:
+
+POST
+https://graph.microsoft.com/beta/copilot/conversations
+
+and:
+
+POST
+https://graph.microsoft.com/beta/copilot/conversations/{conversationId}/chat
+
+But do NOT blindly assume these are still correct.
+
+Verify:
+- current endpoints
+- request format
+- response format
+- delegated permissions
+- supported authentication flows
+- streaming support
+- API limitations
+- licensing requirements
+- tenant/admin consent requirements
+
+Create:
+
+docs/MICROSOFT_API.md
+
+Document exactly what you verified.
+
+If Microsoft has introduced a newer supported endpoint, use the newer official endpoint.
+
+==================================================
+AUTHENTICATION
+==================================================
+
+Use Microsoft Entra ID delegated authentication.
+
+Preferred order:
+
+1. interactive browser authentication
+2. device-code authentication if interactive browser is not practical
+
+Requirements:
+
+- support MFA
+- support Microsoft Authenticator
+- never request or store my password
+- never request an MFA secret
+- never print access tokens
+- never print refresh tokens
+- never print Authorization headers
+- never log cookies
+
+Use Microsoft's supported authentication library if it is available in the corporate npm repository.
+
+If MSAL is available, prefer it.
+
+Persist authentication using the safest practical Microsoft-supported token cache.
+
+Provide:
+
+npm run login
+npm run logout
+
+The first login should give me clear instructions such as:
+
+Open browser
+→ sign into my Microsoft work account
+→ complete MFA
+→ return to terminal
+
+After login, subsequent launches should reuse the cached authentication where Microsoft's library permits it.
+
+Handle Conditional Access errors clearly.
+
+==================================================
+OPENAI-COMPATIBLE API
+==================================================
+
+Expose:
+
+http://127.0.0.1:4141
+
+NEVER bind to:
+
+0.0.0.0
+
+Default Base URL:
+
+http://127.0.0.1:4141/v1
+
+Implement:
+
+GET /health
+
+Return:
+
+{
+  "status": "ok"
+}
+
+--------------------------------------------------
+GET /v1/models
+--------------------------------------------------
+
+Return a valid OpenAI-compatible model-list response.
+
+Example:
+
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "m365-copilot",
+      "object": "model",
+      "created": 0,
+      "owned_by": "microsoft"
+    }
+  ]
+}
+
+The client should be able to send:
+
+model = "m365-copilot"
+
+Also accept these aliases:
+
+"copilot"
+"m365"
+"m365-copilot"
+"auto"
+
+Map all of them to Microsoft 365 Copilot.
+
+--------------------------------------------------
+POST /v1/chat/completions
+--------------------------------------------------
+
+Support OpenAI-style requests such as:
+
+{
+  "model": "m365-copilot",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful coding assistant."
+    },
+    {
+      "role": "user",
+      "content": "Explain this function."
+    }
+  ],
+  "temperature": 0.7,
+  "stream": false
+}
+
+Support roles:
+
+system
+developer
+user
+assistant
+
+If Microsoft Copilot does not have an exact equivalent for a role, transform the history safely into a prompt while preserving ordering and intent.
+
+Do not silently discard system/developer messages.
+
+==================================================
+NON-STREAMING RESPONSE
+==================================================
+
+Return OpenAI-compatible JSON:
+
+{
+  "id": "chatcmpl-...",
+  "object": "chat.completion",
+  "created": 1234567890,
+  "model": "m365-copilot",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "..."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "total_tokens": 0
+  }
+}
+
+If Microsoft does not provide accurate token usage, return zero or omit fields according to OpenAI-compatible client expectations.
+
+Never invent token counts.
+
+==================================================
+STREAMING
+==================================================
+
+Support:
+
+"stream": true
+
+Return:
+
+Content-Type: text/event-stream
+
+Use OpenAI-compatible SSE chunks:
+
+data: {...}
+
+data: {...}
+
+data: [DONE]
+
+If Microsoft provides native streaming, forward it progressively.
+
+If the official Microsoft API does NOT support streaming, implement a compatibility fallback:
+
+1. wait for complete response
+2. emit it using valid OpenAI SSE format
+3. document that it is pseudo-streaming
+
+Do not pretend native streaming exists when it does not.
+
+==================================================
+CONVERSATION MANAGEMENT
+==================================================
+
+Create a conversation abstraction.
+
+Requirements:
+
+- maintain conversation history
+- map OpenAI messages to Copilot conversation
+- automatically create a Microsoft Copilot conversation when required
+- support follow-up messages
+- cleanly handle expired conversation IDs
+- recreate conversation if Microsoft invalidates it
+
+For stateless OpenAI clients:
+
+Reconstruct enough context from the supplied `messages` array so requests work correctly even if a new Copilot conversation must be created.
+
+Create:
+
+src/conversationManager.ts
+
+==================================================
+ERROR COMPATIBILITY
+==================================================
+
+Return OpenAI-style errors:
+
+{
+  "error": {
+    "message": "...",
+    "type": "...",
+    "code": "..."
+  }
+}
+
+Handle separately:
+
+- not logged in
+- authentication expired
+- MFA required
+- Conditional Access blocked
+- Graph permission missing
+- admin consent required
+- Copilot license missing
+- unsupported Microsoft API
+- Microsoft API unavailable
+- HTTP 401
+- HTTP 403
+- HTTP 404
+- HTTP 429
+- HTTP 5xx
+- corporate proxy failure
+- TLS/certificate failure
+- timeout
+- malformed OpenAI request
+
+For HTTP 429:
+
+Respect Retry-After when provided.
+
+Use conservative retry logic with exponential backoff.
+
+Do not retry authentication/permission errors indefinitely.
+
+==================================================
+TIMEOUT / ABORT
+==================================================
+
+Support AbortController.
+
+Configure sensible timeouts.
+
+When the OpenAI client disconnects:
+
+abort the upstream request where possible.
+
+Do not leave unnecessary requests running.
+
+==================================================
+SECURITY
+==================================================
+
+Local server must bind ONLY:
+
+127.0.0.1
+
+Implement optional local API key protection.
+
+Environment variable:
+
+LOCAL_API_KEY
+
+If defined, require:
+
+Authorization: Bearer <LOCAL_API_KEY>
+
+If LOCAL_API_KEY is not defined:
+
+allow localhost requests without a key.
+
+Never expose authentication tokens through this API.
+
+Sanitize logs.
+
+==================================================
+CORPORATE NETWORK SUPPORT
+==================================================
+
+Respect:
+
+HTTP_PROXY
+HTTPS_PROXY
+NO_PROXY
+
+Respect enterprise TLS certificates.
+
+Do not disable certificate validation.
+
+Where Node/Microsoft libraries automatically inherit proxy settings, use that mechanism.
+
+Document proxy troubleshooting in README.
+
+==================================================
+CORS
+==================================================
+
+Support localhost clients.
+
+Allow configurable CORS through:
+
+ALLOWED_ORIGINS
+
+Safe default:
+
+localhost / 127.0.0.1 clients only.
+
+Do not default to unrestricted wildcard access unnecessarily.
+
+==================================================
+LOGGING
+==================================================
+
+Implement useful logging.
+
+Environment variable:
+
+LOG_LEVEL
+
+Values:
+
+error
+warn
+info
+debug
+
+Default:
+
+info
+
+Never log:
+
+- access token
+- refresh token
+- Authorization header
+- cookies
+- password
+- MFA information
+
+==================================================
+CONFIGURATION
+==================================================
+
+Create:
+
+.env.example
+
+Include:
+
+PORT=4141
+HOST=127.0.0.1
+LOCAL_API_KEY=
+LOG_LEVEL=info
+ALLOWED_ORIGINS=
+AZURE_CLIENT_ID=
+AZURE_TENANT_ID=
+
+If a Microsoft-provided public client ID can legitimately be used according to official documentation, document it.
+
+Otherwise explain how an approved Entra App Registration must be configured.
+
+Do not invent client IDs.
+
+==================================================
+ENRA APP REGISTRATION
+==================================================
+
+If an Entra application registration is required:
+
+Create:
+
+docs/ENTRA_SETUP.md
+
+Explain:
+
+- application type
+- redirect URI
+- public client configuration
+- required delegated permissions
+- which permissions require admin consent
+- tenant ID
+- client ID
+- how to configure environment variables
+
+Do not request a client secret if delegated public-client authentication works.
+
+Prefer least privilege.
+
+==================================================
+OPENAI CLIENT COMPATIBILITY
+==================================================
+
+Make the bridge suitable for clients that support:
+
+OpenAI API Base URL
+
+Example configuration:
+
+Base URL:
+http://127.0.0.1:4141/v1
+
+API key:
+anything
+
+Model:
+m365-copilot
+
+Test compatibility assumptions with standard OpenAI request structures.
+
+==================================================
+OPTIONAL /v1/responses
+==================================================
+
+If practical, also implement:
+
+POST /v1/responses
+
+Support a minimal subset of the modern OpenAI Responses API.
+
+At minimum accept:
+
+{
+  "model": "m365-copilot",
+  "input": "Hello"
+}
+
+And return a structurally compatible response.
+
+Do not sacrifice /v1/chat/completions stability for this.
+
+==================================================
+TOOL / FUNCTION CALLING
+==================================================
+
+Investigate whether the official Microsoft 365 Copilot Chat API exposes a supported mechanism corresponding to OpenAI tool/function calling.
+
+If YES:
+
+implement an adapter.
+
+If NO:
+
+do NOT fake autonomous function execution.
+
+If incoming OpenAI requests contain:
+
+tools
+tool_choice
+functions
+function_call
+
+handle them gracefully and return a clear compatibility error or documented fallback.
+
+Create:
+
+docs/COMPATIBILITY.md
+
+Include a feature table:
+
+Feature | Status | Notes
+
+Chat completions
+Streaming
+System messages
+Conversation history
+Tool calls
+Vision
+File inputs
+Token usage
+Responses API
+Structured output
+
+==================================================
+INPUT VALIDATION
+==================================================
+
+Validate all incoming requests.
+
+Prevent:
+
+- huge accidental bodies
+- invalid JSON
+- invalid roles
+- missing model
+- missing messages
+- unsupported content
+
+Use a configurable body-size limit.
+
+==================================================
+PROJECT STRUCTURE
+==================================================
+
+Create approximately:
+
+m365-copilot-openai-bridge/
+│
+├── package.json
+├── package-lock.json
+├── tsconfig.json
+├── .gitignore
+├── .env.example
+├── README.md
+├── BLOCKERS.md
+│
+├── docs/
+│   ├── MICROSOFT_API.md
+│   ├── ENTRA_SETUP.md
+│   └── COMPATIBILITY.md
+│
+├── src/
+│   ├── index.ts
+│   ├── server.ts
+│   ├── config.ts
+│   ├── auth.ts
+│   ├── graphClient.ts
+│   ├── copilotClient.ts
+│   ├── conversationManager.ts
+│   ├── openaiAdapter.ts
+│   ├── responsesAdapter.ts
+│   ├── logger.ts
+│   ├── errors.ts
+│   └── types.ts
+│
+├── scripts/
+│   ├── test-auth.ts
+│   ├── test-copilot.ts
+│   └── smoke-test.ts
+│
+└── tests/
+    └── ...
+
+You may improve the structure if justified.
+
+==================================================
+NPM SCRIPTS
+==================================================
+
+Implement:
+
+npm run build
+npm run start
+npm run dev
+npm run login
+npm run logout
+npm run test
+npm run test:auth
+npm run test:copilot
+npm run smoke
+
+If appropriate also:
+
+npm run typecheck
+npm run lint
+
+==================================================
+SMOKE TEST
+==================================================
+
+Create an automated smoke test.
+
+After authentication, send to Copilot:
+
+Reply with exactly:
+M365_BRIDGE_OK
+
+Verify that the returned response contains:
+
+M365_BRIDGE_OK
+
+Then test the local endpoint:
+
+POST
+http://127.0.0.1:4141/v1/chat/completions
+
+Request:
+
+{
+  "model": "m365-copilot",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Reply with exactly: OPENAI_BRIDGE_OK"
+    }
+  ]
+}
+
+Validate:
+
+OPENAI_BRIDGE_OK
+
+==================================================
+README
+==================================================
+
+Write a complete README.
+
+It should contain:
+
+1. What the project does
+2. Architecture
+3. Requirements
+4. Microsoft 365 Copilot licensing requirements
+5. Entra setup
+6. Installation
+7. Authentication
+8. Starting the server
+9. Testing
+10. OpenAI-compatible configuration
+11. VS Code/client configuration
+12. Streaming behavior
+13. Supported/unsupported features
+14. Corporate Nexus notes
+15. Corporate proxy notes
+16. Security notes
+17. Troubleshooting
+
+Include copy-paste commands for Windows CMD and PowerShell.
+
+==================================================
+BUILD PROCESS
+==================================================
+
+Do ALL of the following automatically:
+
+1. create the project directory
+2. create every required source file
+3. create package.json
+4. install only approved/available dependencies
+5. run TypeScript compilation
+6. fix TypeScript errors
+7. run tests
+8. fix implementation errors
+9. run security sanity checks
+10. run the server locally
+11. test /health
+12. test /v1/models
+13. test malformed requests
+14. if authentication is possible, test Microsoft login
+15. if authenticated, test real M365 Copilot communication
+16. test /v1/chat/completions
+17. test stream=false
+18. test stream=true
+19. stop the test server cleanly
+20. produce the final ZIP
+
+Do not declare success simply because TypeScript compiles.
+
+==================================================
+IF LOGIN REQUIRES ME
+==================================================
+
+The ONLY acceptable reason to pause execution is if Microsoft interactive authentication requires me to personally:
+
+- sign in
+- approve MFA
+- grant a user-consent permission
+
+When that occurs:
+
+show one short message telling me exactly what action is required.
+
+After I complete it:
+
+CONTINUE automatically with testing and packaging.
+
+Do not restart the project-generation process.
+
+==================================================
+IF ADMIN CONSENT IS REQUIRED
+==================================================
+
+If company tenant policy prevents the required Graph permission:
+
+Do not try to bypass it.
+
+Still finish the entire project.
+
+Create:
+
+BLOCKERS.md
+
+Include:
+
+- exact Graph permission
+- exact Microsoft error
+- why it is required
+- whether admin consent is required
+- what administrator action would resolve it
+
+Package the source anyway.
+
+==================================================
+QUALITY REQUIREMENTS
+==================================================
+
+Code must be:
+
+- strongly typed
+- readable
+- reasonably modular
+- secure by default
+- no hard-coded tokens
+- no hard-coded passwords
+- no hard-coded tenant-specific secrets
+- no unnecessary dependencies
+- no disabled TLS verification
+- no unsafe eval
+- no shell command injection
+
+Use comments only where helpful.
+
+==================================================
+FINAL VERIFICATION
+==================================================
+
+Before packaging, run:
+
+npm run build
+
+npm run test
+
+npm run smoke
+
+Check:
+
+http://127.0.0.1:4141/health
+
+Check:
+
+http://127.0.0.1:4141/v1/models
+
+If authenticated, check:
+
+/v1/chat/completions
+
+Record test results in:
+
+BUILD_REPORT.md
+
+Include:
+
+- Node version
+- npm version
+- dependencies
+- build result
+- test result
+- authentication result
+- Microsoft API result
+- OpenAI compatibility result
+- known limitations
+
+==================================================
+FINAL DELIVERY
+==================================================
+
+Finally create:
+
+m365-copilot-openai-bridge.zip
+
+The ZIP must contain the complete project.
+
+Exclude:
+
+node_modules
+.env
+token caches
+access tokens
+refresh tokens
+authentication caches
+logs containing sensitive data
+
+Include:
+
+source
+package.json
+package-lock.json
+README.md
+docs
+tests
+BUILD_REPORT.md
+BLOCKERS.md if applicable
+
+Use Windows PowerShell Compress-Archive or another locally available built-in archive mechanism.
+
+Verify the ZIP exists and can be opened.
+
+At the very end, give me ONLY:
+
+1. Path to the ZIP
+2. Build status
+3. Authentication/API status
+4. Any blocker that requires administrator action
+5. Exact command to unzip/install/start it
+
+Do not paste all source code into chat unless file creation is impossible.
+
+Start now and complete the entire job.
