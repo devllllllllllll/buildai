@@ -1,507 +1,1612 @@
-You are acting as a senior TypeScript/Node.js engineer.
+You are the principal engineer responsible for delivering a production-quality local coding agent.
 
-Build a COMPLETE working project for me from scratch and deliver the final project as a ZIP file.
+Your job is NOT to explain how to build it.
 
-Do not stop after giving instructions.
-Do not only provide code snippets.
-Do not ask me to manually create files one by one.
-Do not wait for confirmation between steps.
+Your job is to ACTUALLY BUILD, TEST, DEBUG, VERIFY, AND PACKAGE the complete project.
 
-Actually create all project files, install/verify dependencies where permitted, run the project, fix errors, test it, and package the final working project into a ZIP.
+PROJECT NAME:
 
-==================================================
-PROJECT
-==================================================
+m365-copilot-local-codex
 
-Name:
+============================================================
+PRIMARY OBJECTIVE
+============================================================
 
-m365-copilot-openai-bridge
+Build a local Codex-style coding agent for Windows that uses my EXISTING Microsoft 365 Copilot WEB access as its reasoning backend.
 
-Goal:
+The final user experience should be:
 
-Create a LOCAL OpenAI-compatible API server that lets applications which support a custom OpenAI API Base URL communicate with my Microsoft 365 Copilot account.
+1. I start the application.
+2. A local web UI opens.
+3. I select/open a local project workspace.
+4. I type a coding task such as:
 
-Target architecture:
+   "Fix the login timeout bug, update all affected files and tests, run the test suite, and stop only when the build passes."
 
-VS Code / AI client / OpenAI-compatible client
-            |
-            v
-http://127.0.0.1:4141/v1
-            |
-            v
-Local TypeScript bridge
-            |
-            v
-Microsoft Graph
-            |
-            v
-Microsoft 365 Copilot Chat API
+5. The agent automatically:
+   - inspects the workspace
+   - searches relevant code
+   - reads relevant files/ranges
+   - asks M365 Copilot Web for reasoning
+   - requests additional local context as needed
+   - creates a plan
+   - proposes multi-file edits
+   - validates every edit
+   - shows a unified diff
+   - applies edits according to permission mode
+   - runs build/tests
+   - analyzes failures
+   - performs corrective iterations
+   - verifies the final build
+   - shows a final change summary
 
-IMPORTANT:
+The final experience should resemble a lightweight local version of:
 
-Use ONLY official Microsoft-supported APIs.
+Codex / Claude Code / Cline
 
-Do NOT:
-- scrape Microsoft 365 Copilot web pages
-- reverse-engineer private Microsoft endpoints
-- extract browser cookies
-- steal or replay authentication tokens
-- bypass MFA
+but with:
+
+Microsoft 365 Copilot Web
+
+as the reasoning engine.
+
+============================================================
+ABSOLUTE REQUIREMENT: DO THE WORK
+============================================================
+
+Do not stop at:
+
+- architecture
+- explanation
+- pseudocode
+- scaffold
+- TODOs
+- partial implementation
+- code snippets
+
+Actually create all files.
+
+Actually run the build.
+
+Actually run tests.
+
+Actually launch the application where execution is available.
+
+Actually test the browser bridge where interactive login permits it.
+
+Actually fix failures.
+
+Actually create the ZIP.
+
+Do not claim something works unless it was tested.
+
+If a component cannot be tested because my manual Microsoft login/MFA is required, mark it explicitly:
+
+NOT VERIFIED — USER AUTHENTICATION REQUIRED
+
+Do not mark it PASS until it has actually succeeded.
+
+============================================================
+NO FALSE SUCCESS
+============================================================
+
+Never write:
+
+"Done"
+"Working"
+"Fully functional"
+"Production ready"
+
+unless the corresponding verification succeeded.
+
+Every major component must have one of:
+
+PASS
+FAIL
+BLOCKED
+NOT TESTED
+
+Record these in:
+
+BUILD_REPORT.md
+
+============================================================
+SECURITY / CORPORATE ENVIRONMENT
+============================================================
+
+This runs on a corporate Windows machine.
+
+DO NOT:
+
+- bypass company security controls
+- bypass npm/Nexus restrictions
+- change configured npm registry to npmjs
+- use GitHub if GitHub is blocked
+- bypass Microsoft MFA
 - bypass Conditional Access
-- bypass corporate proxy/security controls
-- change npm to public registry if the machine is configured to use an internal Nexus
-- disable TLS verification
+- extract authentication cookies
+- copy browser cookies
+- inspect Microsoft access tokens
+- inspect refresh tokens
+- replay Authorization headers
+- scrape authentication storage
+- disable TLS validation
+- install MITM certificates
+- intercept Microsoft HTTPS traffic
+- reverse-engineer private Microsoft APIs
+- call undocumented Copilot backend endpoints
+- modify Group Policy
+- disable endpoint protection
+- attempt credential dumping
 - use NODE_TLS_REJECT_UNAUTHORIZED=0
-- clone GitHub repositories
+- silently download binaries from the internet
 
-This is running on a corporate Windows 11 machine.
+Use only normal browser UI interaction for M365 Copilot.
 
-==================================================
-ENVIRONMENT
-==================================================
+Authentication stays inside Microsoft Edge.
 
-Assume:
+============================================================
+HIGH LEVEL ARCHITECTURE
+============================================================
 
-- Windows 11
-- Node.js installed
-- npm installed
-- npm may be configured to use an internal Nexus repository
-- GitHub cloning may be blocked
-- Microsoft 365 Copilot is available to my work account
-- My account authenticates through Microsoft Entra ID
-- MFA / Microsoft Authenticator may be required
-- Corporate HTTP/HTTPS proxy may be configured
-- I want everything to run locally
+Build:
 
-First inspect:
+┌───────────────────────────────────────┐
+│ Local Web UI                          │
+│ http://127.0.0.1:4140                 │
+│                                       │
+│ Workspace                             │
+│ Chat / Task input                     │
+│ Files                                 │
+│ Agent progress                        │
+│ Diff                                  │
+│ Build/Test output                     │
+│ Approve / Reject / Undo               │
+└─────────────────┬─────────────────────┘
+                  │
+                  ▼
+┌───────────────────────────────────────┐
+│ Local Agent Runtime                   │
+│ http://127.0.0.1:4142                 │
+│                                       │
+│ Workspace tools                       │
+│ Agent orchestration                   │
+│ Context management                    │
+│ Patch validation                      │
+│ Transaction manager                   │
+│ Test/build loop                       │
+│ Safety policy                         │
+└─────────────────┬─────────────────────┘
+                  │
+                  ▼
+┌───────────────────────────────────────┐
+│ M365 Copilot Web Bridge               │
+│ http://127.0.0.1:4141                 │
+│                                       │
+│ Browser automation                    │
+│ Microsoft Edge                        │
+│ Normal Copilot Web UI                 │
+└───────────────────────────────────────┘
+
+Everything must bind only to:
+
+127.0.0.1
+
+Never:
+
+0.0.0.0
+
+============================================================
+PART 1 — STARTUP / ENVIRONMENT DETECTION
+============================================================
+
+At startup inspect:
 
 node -v
 npm -v
 npm config get registry
 npm config list
 
-Respect the existing npm registry configuration.
+Detect:
 
-Never replace it with registry.npmjs.org.
+- Windows version
+- Node version
+- npm version
+- configured npm registry
+- installed Microsoft Edge
+- existing browser automation dependencies
+- git availability
+- PowerShell availability
 
-If a required npm dependency is unavailable through the configured Nexus repository:
+Do NOT alter the configured registry.
 
-1. try to implement the functionality using built-in Node.js APIs
-2. try an already available approved dependency
-3. if still impossible, clearly document the missing dependency in BLOCKERS.md
+Prefer built-in Node.js functionality where practical.
 
-Do not bypass Nexus.
+Use the minimum number of dependencies.
 
-==================================================
-STEP 1 — VERIFY MICROSOFT API
-==================================================
+Before adding any dependency:
 
-Before implementation, verify Microsoft's CURRENT official documentation for the Microsoft 365 Copilot Chat API.
+1. explain internally why it is needed
+2. check whether it is available from the configured package source
+3. prefer an already installed/approved alternative
+4. if unavailable, record it in BLOCKERS.md
 
-Use the current Microsoft Graph API documented by Microsoft.
+Do not bypass package controls.
 
-Expected API family is similar to:
+============================================================
+PART 2 — M365 COPILOT WEB BRIDGE
+============================================================
 
-POST
-https://graph.microsoft.com/beta/copilot/conversations
+The bridge must use the normal browser UI.
 
-and:
+Flow:
 
-POST
-https://graph.microsoft.com/beta/copilot/conversations/{conversationId}/chat
+local request
+→ Edge
+→ existing Microsoft 365 Copilot web UI
+→ normal prompt submission
+→ rendered response
+→ local bridge response
 
-But do NOT blindly assume these are still correct.
+Do not use private Copilot APIs.
 
-Verify:
-- current endpoints
-- request format
-- response format
-- delegated permissions
-- supported authentication flows
-- streaming support
-- API limitations
-- licensing requirements
-- tenant/admin consent requirements
+============================================================
+BROWSER AUTOMATION SELECTION
+============================================================
+
+Choose the first approved/available mechanism:
+
+1. Playwright
+2. Selenium/WebDriver
+3. Edge WebDriver
+4. Puppeteer
+5. another existing approved browser automation mechanism
+
+Prefer installed Microsoft Edge.
+
+Do NOT automatically download Chromium.
+
+Support:
+
+BROWSER=edge
+
+BROWSER_EXECUTABLE_PATH=
+
+HEADLESS=false
+
+Headed mode must be the default.
+
+============================================================
+AUTHENTICATION
+============================================================
+
+First launch:
+
+1. open normal Edge
+2. navigate to configured Copilot page
+3. allow me to log in normally
+4. allow normal corporate SSO
+5. allow Microsoft Authenticator/MFA
+6. wait for Copilot ready state
+
+Never request my password in the application.
+
+Never extract authentication material.
+
+Use browser-managed profile persistence only if allowed normally by Edge.
+
+If the session expires:
+
+show login page again.
+
+============================================================
+COPILOT CONFIG
+============================================================
+
+Environment variables:
+
+COPILOT_URL=
+COPILOT_MODE=auto
+COPILOT_TIMEOUT_MS=180000
+COPILOT_RESPONSE_STABILITY_MS=1500
+
+Modes:
+
+auto
+default
+think-deeper
+
+If Think Deeper exists as a visible supported UI option:
+
+select it through the normal UI.
+
+If not available:
+
+report the limitation.
+
+Never invoke a hidden/private model endpoint.
+
+============================================================
+ROBUST SELECTORS
+============================================================
 
 Create:
 
-docs/MICROSOFT_API.md
+src/bridge/copilot/selectors.ts
 
-Document exactly what you verified.
+Selectors must prioritize:
 
-If Microsoft has introduced a newer supported endpoint, use the newer official endpoint.
+1. ARIA role
+2. accessible label
+3. stable semantic attributes
+4. placeholder/text labels
+5. stable data attributes
 
-==================================================
-AUTHENTICATION
-==================================================
+Avoid generated CSS classes.
 
-Use Microsoft Entra ID delegated authentication.
+Each important UI control must have fallback selectors.
 
-Preferred order:
+Important targets:
 
-1. interactive browser authentication
-2. device-code authentication if interactive browser is not practical
+- prompt input
+- send button
+- stop-generating button
+- new chat button
+- reasoning mode controls
+- assistant response container
 
-Requirements:
+============================================================
+COPILOT STATE MACHINE
+============================================================
 
-- support MFA
-- support Microsoft Authenticator
-- never request or store my password
-- never request an MFA secret
-- never print access tokens
-- never print refresh tokens
-- never print Authorization headers
-- never log cookies
+Implement explicit states:
 
-Use Microsoft's supported authentication library if it is available in the corporate npm repository.
+STARTING
+LOGIN_REQUIRED
+MFA_REQUIRED
+READY
+GENERATING
+IDLE
+SESSION_EXPIRED
+RATE_LIMITED
+ACCESS_DENIED
+UI_CHANGED
+UNAVAILABLE
+ERROR
 
-If MSAL is available, prefer it.
+Do not infer READY simply because the page loaded.
 
-Persist authentication using the safest practical Microsoft-supported token cache.
+============================================================
+RESPONSE COMPLETION
+============================================================
 
-Provide:
+Never depend only on fixed sleep().
 
-npm run login
-npm run logout
+Use multiple completion signals:
 
-The first login should give me clear instructions such as:
+- generation UI state
+- stop button disappearance
+- send button state
+- response DOM mutation
+- response stability timer
 
-Open browser
-→ sign into my Microsoft work account
-→ complete MFA
-→ return to terminal
+A response is complete only after:
 
-After login, subsequent launches should reuse the cached authentication where Microsoft's library permits it.
+generation appears finished
+AND
+response content is stable for configured time
 
-Handle Conditional Access errors clearly.
+============================================================
+RESPONSE EXTRACTION
+============================================================
 
-==================================================
-OPENAI-COMPATIBLE API
-==================================================
+Extract only the latest assistant response.
 
-Expose:
+Preserve:
 
-http://127.0.0.1:4141
+- Markdown
+- headings
+- paragraphs
+- bullets
+- numbered lists
+- code blocks
+- inline code
 
-NEVER bind to:
+Exclude:
 
-0.0.0.0
+- sidebar
+- previous messages
+- user's own prompt
+- navigation text
+- button labels
+- unrelated citation UI
 
-Default Base URL:
+============================================================
+BRIDGE API
+============================================================
 
-http://127.0.0.1:4141/v1
+Bridge:
+
+127.0.0.1:4141
 
 Implement:
 
 GET /health
-
-Return:
-
-{
-  "status": "ok"
-}
-
---------------------------------------------------
+GET /status
 GET /v1/models
---------------------------------------------------
-
-Return a valid OpenAI-compatible model-list response.
-
-Example:
-
-{
-  "object": "list",
-  "data": [
-    {
-      "id": "m365-copilot",
-      "object": "model",
-      "created": 0,
-      "owned_by": "microsoft"
-    }
-  ]
-}
-
-The client should be able to send:
-
-model = "m365-copilot"
-
-Also accept these aliases:
-
-"copilot"
-"m365"
-"m365-copilot"
-"auto"
-
-Map all of them to Microsoft 365 Copilot.
-
---------------------------------------------------
 POST /v1/chat/completions
---------------------------------------------------
+POST /control/new-chat
 
-Support OpenAI-style requests such as:
+Model:
 
-{
-  "model": "m365-copilot",
-  "messages": [
-    {
-      "role": "system",
-      "content": "You are a helpful coding assistant."
-    },
-    {
-      "role": "user",
-      "content": "Explain this function."
-    }
-  ],
-  "temperature": 0.7,
-  "stream": false
-}
+m365-copilot-web
 
-Support roles:
+Aliases:
 
-system
-developer
-user
-assistant
+m365
+copilot
+m365-copilot
+m365-copilot-web
 
-If Microsoft Copilot does not have an exact equivalent for a role, transform the history safely into a prompt while preserving ordering and intent.
+============================================================
+BRIDGE QUEUE
+============================================================
 
-Do not silently discard system/developer messages.
+Browser generation concurrency must default to:
 
-==================================================
-NON-STREAMING RESPONSE
-==================================================
+1
 
-Return OpenAI-compatible JSON:
+Implement FIFO queue.
 
-{
-  "id": "chatcmpl-...",
-  "object": "chat.completion",
-  "created": 1234567890,
-  "model": "m365-copilot",
-  "choices": [
-    {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "..."
-      },
-      "finish_reason": "stop"
-    }
-  ],
-  "usage": {
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "total_tokens": 0
-  }
-}
+Never allow two tasks to type into the same browser conversation simultaneously.
 
-If Microsoft does not provide accurate token usage, return zero or omit fields according to OpenAI-compatible client expectations.
+============================================================
+PART 3 — LOCAL CODING AGENT
+============================================================
 
-Never invent token counts.
+Agent server:
 
-==================================================
-STREAMING
-==================================================
+127.0.0.1:4142
 
-Support:
+This must be a REAL iterative coding agent.
 
-"stream": true
+Not a one-shot prompt wrapper.
 
-Return:
+============================================================
+REQUIRED AGENT TOOLS
+============================================================
 
-Content-Type: text/event-stream
+Implement:
 
-Use OpenAI-compatible SSE chunks:
+workspace_info
 
-data: {...}
+list_files
 
-data: {...}
+find_files
 
-data: [DONE]
+search_text
 
-If Microsoft provides native streaming, forward it progressively.
+read_file
 
-If the official Microsoft API does NOT support streaming, implement a compatibility fallback:
+read_file_range
 
-1. wait for complete response
-2. emit it using valid OpenAI SSE format
-3. document that it is pseudo-streaming
+read_multiple_files
 
-Do not pretend native streaming exists when it does not.
+file_exists
 
-==================================================
-CONVERSATION MANAGEMENT
-==================================================
+git_status
 
-Create a conversation abstraction.
+git_diff
 
-Requirements:
+git_diff_file
 
-- maintain conversation history
-- map OpenAI messages to Copilot conversation
-- automatically create a Microsoft Copilot conversation when required
-- support follow-up messages
-- cleanly handle expired conversation IDs
-- recreate conversation if Microsoft invalidates it
+get_diagnostics
 
-For stateless OpenAI clients:
+propose_edit
 
-Reconstruct enough context from the supplied `messages` array so requests work correctly even if a new Copilot conversation must be created.
+propose_patch
 
-Create:
+create_file
 
-src/conversationManager.ts
+rename_file
 
-==================================================
-ERROR COMPATIBILITY
-==================================================
+delete_file
 
-Return OpenAI-style errors:
+run_build
 
-{
-  "error": {
-    "message": "...",
-    "type": "...",
-    "code": "..."
-  }
-}
+run_tests
 
-Handle separately:
+run_typecheck
 
-- not logged in
-- authentication expired
-- MFA required
-- Conditional Access blocked
-- Graph permission missing
-- admin consent required
-- Copilot license missing
-- unsupported Microsoft API
-- Microsoft API unavailable
-- HTTP 401
-- HTTP 403
-- HTTP 404
-- HTTP 429
-- HTTP 5xx
-- corporate proxy failure
-- TLS/certificate failure
-- timeout
-- malformed OpenAI request
+run_lint
 
-For HTTP 429:
+run_command
 
-Respect Retry-After when provided.
+rollback_changes
 
-Use conservative retry logic with exponential backoff.
+============================================================
+WORKSPACE SANDBOX
+============================================================
 
-Do not retry authentication/permission errors indefinitely.
+Every filesystem operation must remain inside the selected workspace.
 
-==================================================
-TIMEOUT / ABORT
-==================================================
+Before every operation:
 
-Support AbortController.
+1. resolve absolute path
+2. normalize Windows path
+3. resolve symlinks/junctions where possible
+4. confirm final path remains inside workspace root
 
-Configure sensible timeouts.
+Reject:
 
-When the OpenAI client disconnects:
+../
 
-abort the upstream request where possible.
+absolute external paths
 
-Do not leave unnecessary requests running.
+UNC escapes
 
-==================================================
-SECURITY
-==================================================
+junction escapes
 
-Local server must bind ONLY:
+symlink escapes
 
-127.0.0.1
+case-insensitive path tricks
 
-Implement optional local API key protection.
+alternate drive escapes
 
-Environment variable:
+Never modify a file outside the selected workspace.
 
-LOCAL_API_KEY
+============================================================
+DEFAULT EXCLUSIONS
+============================================================
 
-If defined, require:
+Do not automatically inspect/send:
 
-Authorization: Bearer <LOCAL_API_KEY>
-
-If LOCAL_API_KEY is not defined:
-
-allow localhost requests without a key.
-
-Never expose authentication tokens through this API.
-
-Sanitize logs.
-
-==================================================
-CORPORATE NETWORK SUPPORT
-==================================================
+.git/
+node_modules/
+dist/
+build/
+coverage/
+target/
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.p12
+id_rsa*
+credentials
+browser profiles
+cloud credential directories
 
 Respect:
 
-HTTP_PROXY
-HTTPS_PROXY
-NO_PROXY
+.gitignore
 
-Respect enterprise TLS certificates.
+Also support:
 
-Do not disable certificate validation.
+.m365agentignore
 
-Where Node/Microsoft libraries automatically inherit proxy settings, use that mechanism.
+============================================================
+SECRET REDACTION
+============================================================
 
-Document proxy troubleshooting in README.
+Before code/context is sent to M365 Copilot:
 
-==================================================
-CORS
-==================================================
+run secret detection.
 
-Support localhost clients.
+Detect common:
 
-Allow configurable CORS through:
-
-ALLOWED_ORIGINS
-
-Safe default:
-
-localhost / 127.0.0.1 clients only.
-
-Do not default to unrestricted wildcard access unnecessarily.
-
-==================================================
-LOGGING
-==================================================
-
-Implement useful logging.
-
-Environment variable:
-
-LOG_LEVEL
-
-Values:
-
-error
-warn
-info
-debug
+Bearer tokens
+JWTs
+AWS access keys
+API keys
+private keys
+password assignments
+connection strings containing credentials
+client secrets
 
 Default:
 
-info
+REDACT_SECRETS=true
+
+Never log secret values.
+
+============================================================
+AGENT TOOL PROTOCOL
+============================================================
+
+Because Copilot Web may not provide native function calling:
+
+implement a strict structured JSON tool protocol.
+
+Valid Copilot action:
+
+{
+  "type": "tool_call",
+  "id": "call_001",
+  "tool": "search_text",
+  "arguments": {
+    "query": "CampaignForm",
+    "path": "src"
+  }
+}
+
+Local response:
+
+{
+  "type": "tool_result",
+  "id": "call_001",
+  "ok": true,
+  "result": []
+}
+
+Never execute freeform prose as a tool call.
+
+============================================================
+JSON PARSER
+============================================================
+
+Handle:
+
+raw JSON
+
+```json fenced JSON
+
+valid balanced JSON embedded in surrounding text
+
+But:
+
+if multiple conflicting actions exist:
+
+reject and ask Copilot to resend one valid action.
+
+Validate every call using explicit schemas.
+
+============================================================
+AGENT LOOP
+============================================================
+
+Implement:
+
+USER TASK
+↓
+create dedicated Copilot conversation
+↓
+send agent protocol + task
+↓
+Copilot requests context/tool
+↓
+validate request
+↓
+execute safe local tool
+↓
+send observation
+↓
+repeat
+↓
+Copilot proposes edits
+↓
+validate ALL edits
+↓
+generate full multi-file diff
+↓
+review/approval according to mode
+↓
+transactionally apply
+↓
+build/test
+↓
+if failure:
+    send relevant sanitized error context
+    continue agent loop
+↓
+verify
+↓
+final report
+
+Config:
+
+MAX_AGENT_STEPS=40
+MAX_FIX_ITERATIONS=5
+
+Stop cleanly when limits are reached.
+
+Never infinite-loop.
+
+============================================================
+AGENT MODES
+============================================================
+
+Implement:
+
+ask
+plan
+review
+agent
+
+ASK:
+read-only questions about code
+
+PLAN:
+analyze workspace and return implementation plan
+no file modifications
+
+REVIEW:
+inspect current git/uncommitted changes
+no automatic modifications
+
+AGENT:
+read/search/edit/build/test loop
+
+============================================================
+PERMISSION MODES
+============================================================
+
+AGENT_PERMISSION_MODE=review
+
+Modes:
+
+review
+auto-edit
+
+Default:
+
+review
+
+REVIEW:
+
+reading/search automatic
+
+editing requires user approval
+
+commands beyond known-safe build/test require approval
+
+AUTO-EDIT:
+
+workspace edits permitted automatically
+
+safe build/test commands automatic
+
+dangerous operations still blocked
+
+Never automatically switch modes.
+
+============================================================
+MULTI-FILE EDIT TRANSACTIONS
+============================================================
+
+This is critical.
+
+If Copilot proposes changes to:
+
+A.ts
+B.ts
+C.ts
+
+before changing anything:
+
+validate ALL three.
+
+Confirm:
+
+- all paths valid
+- all anchors exist
+- all expected text matches
+- all files writable
+- none outside workspace
+
+Generate complete diff.
+
+Only then apply.
+
+If ANY edit fails:
+
+ROLL BACK ALL changes from the transaction.
+
+Never leave half-applied multi-file edits.
+
+============================================================
+PRE-EDIT SNAPSHOT
+============================================================
+
+Before every edit transaction:
+
+capture original content for every touched file.
+
+Store only in a temporary local transaction store.
+
+Support:
+
+Undo Last Change
+
+Rollback Current Task
+
+Do not depend solely on Git.
+
+============================================================
+PATCH STRATEGY
+============================================================
+
+Prefer minimal targeted changes.
+
+Do not rewrite entire files unless necessary.
+
+Preferred operations:
+
+exact replacement
+
+line range replacement
+
+create file
+
+delete file
+
+rename file
+
+Each exact replacement must satisfy:
+
+old text exists
+
+old text uniquely matches
+
+If not:
+
+reject edit
+
+ask Copilot to re-read the relevant section
+
+Do NOT "best guess" the match.
+
+============================================================
+OPTIMISTIC CONCURRENCY CHECK
+============================================================
+
+Before writing:
+
+confirm the file has not changed since it was read.
+
+Use content hash.
+
+If hash changed:
+
+do not overwrite.
+
+Mark:
+
+FILE_CHANGED_EXTERNALLY
+
+Re-read and ask Copilot to reconsider.
+
+============================================================
+ATOMIC WRITES
+============================================================
+
+Where possible:
+
+write to temporary file
+
+fsync/close
+
+rename atomically
+
+Do not write directly over important files if a safer atomic method is available.
+
+============================================================
+LINE ENDINGS / ENCODING
+============================================================
+
+Preserve:
+
+CRLF/LF
+
+UTF-8 BOM where present
+
+file encoding where practical
+
+Do not unnecessarily reformat entire files.
+
+============================================================
+COMMAND EXECUTION
+============================================================
+
+Use executable + argument arrays.
+
+Prefer:
+
+spawn
+execFile
+
+Avoid shell:true.
+
+Never execute Copilot prose as shell.
+
+============================================================
+SAFE COMMAND DETECTION
+============================================================
+
+Detect project ecosystem.
+
+Node:
+
+npm run build
+npm test
+npm run test
+npm run typecheck
+npm run lint
+
+Java:
+
+mvn test
+mvn package
+
+gradlew.bat test
+gradlew.bat build
+
+Python:
+
+pytest
+python -m pytest
+
+Run existing repository scripts where possible.
+
+Do not invent random commands.
+
+============================================================
+BLOCKED COMMANDS
+============================================================
+
+Block dangerous operations, including equivalent variants:
+
+rm -rf
+rmdir /s
+del /s
+format
+diskpart
+shutdown
+reboot
+git reset --hard
+git clean -fd
+git clean -fdx
+git checkout -- .
+git restore .
+Remove-Item -Recurse on workspace root
+registry edits
+Group Policy changes
+credential access
+browser authentication storage access
+TLS disabling
+PowerShell download-and-execute
+curl piped to shell
+arbitrary executable downloaded from network
+
+============================================================
+NETWORK
+============================================================
+
+Default:
+
+ALLOW_AGENT_NETWORK_COMMANDS=false
+
+Agent must not arbitrarily upload repository content.
+
+Do not upload code to services other than the configured M365 Copilot Web interaction.
+
+============================================================
+BUILD / TEST REPAIR LOOP
+============================================================
+
+After changes:
+
+1. determine project type
+2. run typecheck if applicable
+3. run relevant tests
+4. run build
+
+Capture:
+
+exit code
+stdout
+stderr
+duration
+
+If failure:
+
+send only relevant diagnostics to Copilot.
+
+Include:
+
+file names
+line numbers
+error messages
+small relevant context
+
+Do not send massive logs.
+
+Then allow targeted repair.
+
+MAX_FIX_ITERATIONS=5.
+
+============================================================
+DEFINITION OF SUCCESS
+============================================================
+
+A coding task is NOT successful merely because edits were applied.
+
+Success requires:
+
+- all requested edits applied
+- edit transaction valid
+- no unresolved patch failures
+- selected verification command succeeded
+- final diff available
+- no known safety violation
+
+If tests cannot run:
+
+report:
+
+COMPLETED_WITHOUT_TEST_VERIFICATION
+
+not:
+
+SUCCESS
+
+============================================================
+PART 4 — LOCAL WEB UI
+============================================================
+
+Build:
+
+http://127.0.0.1:4140
+
+Prefer a lightweight implementation.
+
+Avoid a heavy frontend dependency if unnecessary.
+
+UI layout:
+
+LEFT:
+workspace/files
+
+CENTER:
+agent conversation/progress
+
+RIGHT:
+diff/review
+
+BOTTOM:
+build/test/terminal output
+
+============================================================
+WEB UI TOP BAR
+============================================================
+
+Show:
+
+Workspace
+
+Agent mode:
+Ask / Plan / Review / Agent
+
+Permission:
+Review / Auto-edit
+
+Copilot status
+
+Browser status
+
+Build status
+
+============================================================
+TASK INPUT
+============================================================
+
+Large input:
+
+"Ask agent..."
+
+Buttons:
+
+Run
+
+Stop
+
+New Task
+
+Review Changes
+
+Approve
+
+Reject
+
+Undo
+
+Run Tests
+
+Run Build
+
+============================================================
+AGENT PROGRESS
+============================================================
+
+Show live events such as:
+
+Analyzing workspace
+
+Searching "CampaignForm"
+
+Reading src/CampaignForm.tsx
+
+Reading src/hooks/useValidation.ts
+
+Asking M365 Copilot
+
+Copilot requested additional context
+
+Planning 3 file edits
+
+Validating patch
+
+Awaiting approval
+
+Applying transaction
+
+Running npm test
+
+2 tests failed
+
+Diagnosing
+
+Applying repair
+
+Running tests
+
+42 tests passed
+
+Running build
+
+Build passed
+
+Completed
+
+============================================================
+FILE TREE
+============================================================
+
+Show workspace tree.
+
+Do not display ignored directories by default.
+
+Clicking a file should show its content read-only unless opened for edit review.
+
+============================================================
+DIFF VIEW
+============================================================
+
+Support:
+
+multi-file unified diff
+
+before/after side-by-side view where practical
+
+Per file:
+
+Accept
+Reject
+
+Also:
+
+Accept All
+Reject All
+
+But if per-file acceptance would invalidate the transaction:
+
+warn the user.
+
+============================================================
+UNDO
+============================================================
+
+Provide:
+
+Undo Last Applied Transaction
+
+Restore exact previous file contents.
+
+============================================================
+WEBSOCKET/SSE
+============================================================
+
+Use SSE or WebSocket for agent progress.
+
+Prefer SSE if simpler and sufficient.
+
+============================================================
+AGENT HTTP API
+============================================================
+
+Implement approximately:
+
+GET /health
+
+GET /status
+
+POST /workspaces/open
+
+GET /workspace/files
+
+GET /workspace/file
+
+POST /tasks
+
+GET /tasks/:id
+
+GET /tasks/:id/events
+
+GET /tasks/:id/diff
+
+POST /tasks/:id/approve
+
+POST /tasks/:id/reject
+
+POST /tasks/:id/cancel
+
+POST /tasks/:id/undo
+
+POST /tasks/:id/run-tests
+
+POST /tasks/:id/run-build
+
+============================================================
+PART 5 — OPTIONAL VS CODE INTEGRATION
+============================================================
+
+Build a minimal VS Code extension if dependencies/API access permit it.
+
+It must NOT be required for core functionality.
+
+The browser UI must work independently.
+
+Commands:
+
+M365 Agent: Open UI
+
+M365 Agent: Start Task
+
+M365 Agent: Review Changes
+
+M365 Agent: Run Tests
+
+M365 Agent: Show Status
+
+M365 Agent: Undo Last Change
+
+Use the existing local agent server.
+
+Do not duplicate the agent engine inside the extension.
+
+============================================================
+WORKSPACE TRUST
+============================================================
+
+If integrated with VS Code:
+
+respect Workspace Trust.
+
+Untrusted workspace:
+
+read-only analysis only
+
+no file writes
+
+no command execution
+
+============================================================
+PART 6 — CONTEXT MANAGEMENT
+============================================================
+
+Do not send the entire repository to Copilot.
+
+Use retrieval.
+
+Typical process:
+
+workspace overview
+
+search symbols/text
+
+read likely entry points
+
+read related types/interfaces
+
+read tests
+
+read only relevant ranges
+
+Track already-read content.
+
+Avoid duplicate context.
+
+Config:
+
+MAX_CONTEXT_CHARS=200000
+MAX_FILE_BYTES=500000
+
+If file is too large:
+
+search first
+
+read ranges only.
+
+============================================================
+INTERNAL CODING AGENT PROMPT
+============================================================
+
+Create a strong system prompt internally for the M365 Copilot reasoning engine.
+
+It must say approximately:
+
+You are the reasoning engine of a local coding agent.
+
+You do not directly access the filesystem.
+
+Never assume file contents.
+
+Request context through provided tools.
+
+Search before assuming.
+
+Read relevant implementation and tests before editing.
+
+Prefer minimal changes.
+
+Preserve existing architecture and style.
+
+Do not modify unrelated code.
+
+Do not fabricate successful build/test results.
+
+Use only the structured action protocol.
+
+When editing, request precise modifications.
+
+If an edit fails validation, re-read the file.
+
+If tests fail, diagnose from actual error output.
+
+Do not ask the human to manually edit files when supported tools can perform the operation.
+
+Return final only when verification is complete or a real blocker is identified.
+
+============================================================
+PART 7 — SELF VALIDATION / TEST SUITE
+============================================================
+
+Create automated tests for all critical components.
+
+Tests MUST include:
+
+PATH SECURITY
+
+- normal workspace path allowed
+- ../ escape rejected
+- absolute outside path rejected
+- symlink/junction escape rejected where testable
+
+EDIT ENGINE
+
+- exact unique replacement works
+- missing oldText rejected
+- duplicate oldText rejected
+- multi-file transaction succeeds
+- transaction failure rolls everything back
+- external file modification detected
+- undo restores exact bytes
+
+JSON TOOL PARSER
+
+- direct JSON
+- fenced JSON
+- JSON surrounded by prose
+- invalid JSON rejected
+- unknown tool rejected
+- invalid args rejected
+- multiple ambiguous actions rejected
+
+COMMAND POLICY
+
+- npm test allowed
+- npm run build allowed
+- git status allowed
+- git diff allowed
+- git reset --hard blocked
+- rm -rf blocked
+- PowerShell recursive deletion blocked
+- download-and-execute blocked
+
+QUEUE
+
+- only one Copilot generation runs at a time
+- queued tasks preserve order
+
+HTTP
+
+- health endpoint
+- malformed JSON
+- request size limit
+- localhost binding
+
+TRANSACTION
+
+- three-file change applies atomically
+- simulated second-file write failure causes full rollback
+
+============================================================
+PART 8 — REAL SMOKE TEST
+============================================================
+
+Perform local smoke tests.
+
+1:
+
+GET local UI health
+
+2:
+
+GET bridge health
+
+3:
+
+GET agent health
+
+4:
+
+Open a TEMPORARY test workspace created specifically for testing.
+
+Never use my real repo for destructive smoke tests.
+
+Create sample files.
+
+Ask agent to:
+
+"Rename add() to sum() and update all references and tests."
+
+Verify:
+
+- search
+- read
+- multi-file edit
+- diff
+- approval simulation
+- apply
+- test
+- undo
+
+Verify original files restored after undo.
+
+============================================================
+REAL COPILOT TEST
+============================================================
+
+When Microsoft login is required:
+
+pause ONLY for:
+
+"Please complete Microsoft login/MFA in the browser."
+
+After I complete login:
+
+continue.
+
+Test prompt:
+
+Reply with exactly:
+
+M365_AGENT_BRIDGE_OK
+
+Do not treat login page accessibility as successful Copilot communication.
+
+The exact response must actually be received.
+
+============================================================
+END-TO-END AGENT TEST
+============================================================
+
+Using temporary sample project:
+
+ask through the complete agent pipeline:
+
+"Change the greeting from Hello to Hello World and update the test."
+
+The system must:
+
+- query M365 Copilot
+- request/read files
+- create edit
+- apply transaction
+- run test
+- report result
+
+If this cannot be verified because Copilot login is unavailable:
+
+mark it BLOCKED, not PASS.
+
+============================================================
+PART 9 — ERROR RECOVERY
+============================================================
+
+Implement clean recovery for:
+
+browser crash
+
+Copilot page reload
+
+session expiration
+
+UI selector change
+
+request timeout
+
+invalid Copilot JSON
+
+edit validation failure
+
+test timeout
+
+command failure
+
+user cancellation
+
+agent step limit
+
+Copilot refusal
+
+If browser dies:
+
+restart browser once.
+
+If login is required:
+
+wait for human.
+
+Never automatically bypass authentication.
+
+============================================================
+PART 10 — LOGGING
+============================================================
+
+Environment:
+
+LOG_LEVEL=info
+LOG_CONTENT=false
 
 Never log:
 
-- access token
-- refresh token
-- Authorization header
-- cookies
-- password
-- MFA information
+passwords
 
-==================================================
-CONFIGURATION
-==================================================
+cookies
+
+tokens
+
+authorization headers
+
+MFA data
+
+secret values
+
+entire source files by default
+
+Logs may include:
+
+file path
+tool name
+duration
+exit status
+agent state
+
+============================================================
+PART 11 — CONFIG
+============================================================
 
 Create:
 
@@ -509,452 +1614,442 @@ Create:
 
 Include:
 
-PORT=4141
-HOST=127.0.0.1
-LOCAL_API_KEY=
+UI_HOST=127.0.0.1
+UI_PORT=4140
+
+BRIDGE_HOST=127.0.0.1
+BRIDGE_PORT=4141
+
+AGENT_HOST=127.0.0.1
+AGENT_PORT=4142
+
+COPILOT_URL=
+COPILOT_MODE=auto
+COPILOT_TIMEOUT_MS=180000
+COPILOT_RESPONSE_STABILITY_MS=1500
+
+BROWSER=edge
+BROWSER_EXECUTABLE_PATH=
+HEADLESS=false
+
+AGENT_MODE=agent
+AGENT_PERMISSION_MODE=review
+
+MAX_AGENT_STEPS=40
+MAX_FIX_ITERATIONS=5
+
+MAX_CONTEXT_CHARS=200000
+MAX_FILE_BYTES=500000
+MAX_QUEUE_SIZE=10
+
+REDACT_SECRETS=true
+ALLOW_AGENT_NETWORK_COMMANDS=false
+
 LOG_LEVEL=info
-ALLOWED_ORIGINS=
-AZURE_CLIENT_ID=
-AZURE_TENANT_ID=
+LOG_CONTENT=false
 
-If a Microsoft-provided public client ID can legitimately be used according to official documentation, document it.
+DIAGNOSTIC_SCREENSHOTS=false
 
-Otherwise explain how an approved Entra App Registration must be configured.
+============================================================
+PART 12 — PROJECT STRUCTURE
+============================================================
 
-Do not invent client IDs.
+Use a clean structure similar to:
 
-==================================================
-ENRA APP REGISTRATION
-==================================================
+m365-copilot-local-codex/
 
-If an Entra application registration is required:
+package.json
+package-lock.json
+tsconfig.json
+.env.example
+.gitignore
+README.md
+BUILD_REPORT.md
+BLOCKERS.md
+SECURITY.md
 
-Create:
+src/
 
-docs/ENTRA_SETUP.md
+  index.ts
+  config.ts
 
-Explain:
+  ui/
+    server.ts
+    public/
+      index.html
+      app.js
+      styles.css
 
-- application type
-- redirect URI
-- public client configuration
-- required delegated permissions
-- which permissions require admin consent
-- tenant ID
-- client ID
-- how to configure environment variables
+  bridge/
+    server.ts
+    queue.ts
+    openaiAdapter.ts
 
-Do not request a client secret if delegated public-client authentication works.
+    copilot/
+      browser.ts
+      selectors.ts
+      stateDetector.ts
+      responseExtractor.ts
+      copilotPage.ts
 
-Prefer least privilege.
+  agent/
+    server.ts
+    orchestrator.ts
+    taskManager.ts
+    contextManager.ts
+    toolProtocol.ts
+    toolParser.ts
+    permissions.ts
 
-==================================================
-OPENAI CLIENT COMPATIBILITY
-==================================================
+    tools/
+      workspace.ts
+      files.ts
+      search.ts
+      git.ts
+      edit.ts
+      commands.ts
+      diagnostics.ts
 
-Make the bridge suitable for clients that support:
+    edits/
+      patchEngine.ts
+      transaction.ts
+      diff.ts
+      undo.ts
 
-OpenAI API Base URL
+    security/
+      paths.ts
+      secrets.ts
+      commandPolicy.ts
 
-Example configuration:
+    prompts/
+      codingAgent.ts
 
-Base URL:
-http://127.0.0.1:4141/v1
+tests/
 
-API key:
-anything
+scripts/
 
-Model:
-m365-copilot
+vscode-extension/
+  if practical
 
-Test compatibility assumptions with standard OpenAI request structures.
+You may improve the structure.
 
-==================================================
-OPTIONAL /v1/responses
-==================================================
-
-If practical, also implement:
-
-POST /v1/responses
-
-Support a minimal subset of the modern OpenAI Responses API.
-
-At minimum accept:
-
-{
-  "model": "m365-copilot",
-  "input": "Hello"
-}
-
-And return a structurally compatible response.
-
-Do not sacrifice /v1/chat/completions stability for this.
-
-==================================================
-TOOL / FUNCTION CALLING
-==================================================
-
-Investigate whether the official Microsoft 365 Copilot Chat API exposes a supported mechanism corresponding to OpenAI tool/function calling.
-
-If YES:
-
-implement an adapter.
-
-If NO:
-
-do NOT fake autonomous function execution.
-
-If incoming OpenAI requests contain:
-
-tools
-tool_choice
-functions
-function_call
-
-handle them gracefully and return a clear compatibility error or documented fallback.
-
-Create:
-
-docs/COMPATIBILITY.md
-
-Include a feature table:
-
-Feature | Status | Notes
-
-Chat completions
-Streaming
-System messages
-Conversation history
-Tool calls
-Vision
-File inputs
-Token usage
-Responses API
-Structured output
-
-==================================================
-INPUT VALIDATION
-==================================================
-
-Validate all incoming requests.
-
-Prevent:
-
-- huge accidental bodies
-- invalid JSON
-- invalid roles
-- missing model
-- missing messages
-- unsupported content
-
-Use a configurable body-size limit.
-
-==================================================
-PROJECT STRUCTURE
-==================================================
-
-Create approximately:
-
-m365-copilot-openai-bridge/
-│
-├── package.json
-├── package-lock.json
-├── tsconfig.json
-├── .gitignore
-├── .env.example
-├── README.md
-├── BLOCKERS.md
-│
-├── docs/
-│   ├── MICROSOFT_API.md
-│   ├── ENTRA_SETUP.md
-│   └── COMPATIBILITY.md
-│
-├── src/
-│   ├── index.ts
-│   ├── server.ts
-│   ├── config.ts
-│   ├── auth.ts
-│   ├── graphClient.ts
-│   ├── copilotClient.ts
-│   ├── conversationManager.ts
-│   ├── openaiAdapter.ts
-│   ├── responsesAdapter.ts
-│   ├── logger.ts
-│   ├── errors.ts
-│   └── types.ts
-│
-├── scripts/
-│   ├── test-auth.ts
-│   ├── test-copilot.ts
-│   └── smoke-test.ts
-│
-└── tests/
-    └── ...
-
-You may improve the structure if justified.
-
-==================================================
-NPM SCRIPTS
-==================================================
+============================================================
+PART 13 — NPM SCRIPTS
+============================================================
 
 Implement:
 
-npm run build
-npm run start
 npm run dev
-npm run login
-npm run logout
-npm run test
-npm run test:auth
-npm run test:copilot
-npm run smoke
 
-If appropriate also:
+npm run build
+
+npm start
+
+npm test
 
 npm run typecheck
-npm run lint
 
-==================================================
-SMOKE TEST
-==================================================
+npm run smoke
 
-Create an automated smoke test.
+npm run test:bridge
 
-After authentication, send to Copilot:
+npm run test:agent
 
-Reply with exactly:
-M365_BRIDGE_OK
+npm run test:security
 
-Verify that the returned response contains:
+npm run test:transaction
 
-M365_BRIDGE_OK
+npm run package
 
-Then test the local endpoint:
+============================================================
+PART 14 — README
+============================================================
 
-POST
-http://127.0.0.1:4141/v1/chat/completions
+README must include exact Windows instructions.
 
-Request:
+First run:
 
-{
-  "model": "m365-copilot",
-  "messages": [
-    {
-      "role": "user",
-      "content": "Reply with exactly: OPENAI_BRIDGE_OK"
-    }
-  ]
-}
+npm install
+npm run build
+npm start
 
-Validate:
+Explain:
 
-OPENAI_BRIDGE_OK
+1. startup
+2. browser login
+3. workspace selection
+4. Ask mode
+5. Plan mode
+6. Agent mode
+7. Review mode
+8. reviewing diff
+9. approving changes
+10. undo
+11. running tests
+12. troubleshooting Copilot UI changes
+13. corporate Nexus limitations
+14. safety model
 
-==================================================
-README
-==================================================
+============================================================
+PART 15 — BUILD GATES
+============================================================
 
-Write a complete README.
+Do not package until these succeed if technically possible:
 
-It should contain:
+GATE 1
+TypeScript typecheck
 
-1. What the project does
-2. Architecture
-3. Requirements
-4. Microsoft 365 Copilot licensing requirements
-5. Entra setup
-6. Installation
-7. Authentication
-8. Starting the server
-9. Testing
-10. OpenAI-compatible configuration
-11. VS Code/client configuration
-12. Streaming behavior
-13. Supported/unsupported features
-14. Corporate Nexus notes
-15. Corporate proxy notes
-16. Security notes
-17. Troubleshooting
+GATE 2
+unit tests
 
-Include copy-paste commands for Windows CMD and PowerShell.
+GATE 3
+security tests
 
-==================================================
-BUILD PROCESS
-==================================================
+GATE 4
+transaction rollback tests
 
-Do ALL of the following automatically:
+GATE 5
+HTTP smoke tests
 
-1. create the project directory
-2. create every required source file
-3. create package.json
-4. install only approved/available dependencies
-5. run TypeScript compilation
-6. fix TypeScript errors
-7. run tests
-8. fix implementation errors
-9. run security sanity checks
-10. run the server locally
-11. test /health
-12. test /v1/models
-13. test malformed requests
-14. if authentication is possible, test Microsoft login
-15. if authenticated, test real M365 Copilot communication
-16. test /v1/chat/completions
-17. test stream=false
-18. test stream=true
-19. stop the test server cleanly
-20. produce the final ZIP
+GATE 6
+local UI launch
 
-Do not declare success simply because TypeScript compiles.
+GATE 7
+browser launch
 
-==================================================
-IF LOGIN REQUIRES ME
-==================================================
+GATE 8
+Copilot real-response test
+if authentication is available
 
-The ONLY acceptable reason to pause execution is if Microsoft interactive authentication requires me to personally:
+GATE 9
+end-to-end temporary workspace coding task
+if Copilot communication is available
 
-- sign in
-- approve MFA
-- grant a user-consent permission
+If any mandatory local gate fails:
 
-When that occurs:
+FIX IT BEFORE PACKAGING.
 
-show one short message telling me exactly what action is required.
+If Copilot-specific gate cannot run only because manual account access is unavailable:
 
-After I complete it:
+package project but mark:
 
-CONTINUE automatically with testing and packaging.
+BLOCKED_PENDING_USER_LOGIN
 
-Do not restart the project-generation process.
+============================================================
+PART 16 — CODE REVIEW YOUR OWN WORK
+============================================================
 
-==================================================
-IF ADMIN CONSENT IS REQUIRED
-==================================================
+Before final packaging:
 
-If company tenant policy prevents the required Graph permission:
+perform a complete self-review.
 
-Do not try to bypass it.
+Search for:
 
-Still finish the entire project.
+TODO
+
+FIXME
+
+throw new Error("Not implemented")
+
+mock-only production paths
+
+hardcoded passwords
+
+hardcoded tokens
+
+0.0.0.0
+
+TLS disabling
+
+unsafe shell execution
+
+path traversal
+
+missing error handling
+
+unbounded loops
+
+unbounded request bodies
+
+missing timeouts
+
+unawaited promises
+
+swallowed exceptions
+
+partial transaction writes
+
+incorrect Windows path handling
+
+Fix issues found.
+
+============================================================
+PART 17 — FINAL CLEAN BUILD
+============================================================
+
+Delete generated build output where appropriate.
+
+Run clean install/build using the permitted package source if feasible.
+
+Run:
+
+npm run typecheck
+npm test
+npm run build
+npm run smoke
+
+Capture exact results.
+
+============================================================
+PART 18 — BUILD REPORT
+============================================================
+
+BUILD_REPORT.md must include:
+
+System information
+
+Node version
+
+npm version
+
+npm registry
+
+Browser automation mechanism
+
+Browser executable
+
+Dependencies
+
+Typecheck result
+
+Unit test result
+
+Security test result
+
+Transaction test result
+
+UI smoke result
+
+Bridge result
+
+Copilot login result
+
+Real Copilot prompt result
+
+Agent E2E result
+
+Known limitations
+
+Blocked items
+
+Every line must use:
+
+PASS
+FAIL
+BLOCKED
+NOT TESTED
+
+No vague wording.
+
+============================================================
+PART 19 — PACKAGE
+============================================================
 
 Create:
 
-BLOCKERS.md
-
-Include:
-
-- exact Graph permission
-- exact Microsoft error
-- why it is required
-- whether admin consent is required
-- what administrator action would resolve it
-
-Package the source anyway.
-
-==================================================
-QUALITY REQUIREMENTS
-==================================================
-
-Code must be:
-
-- strongly typed
-- readable
-- reasonably modular
-- secure by default
-- no hard-coded tokens
-- no hard-coded passwords
-- no hard-coded tenant-specific secrets
-- no unnecessary dependencies
-- no disabled TLS verification
-- no unsafe eval
-- no shell command injection
-
-Use comments only where helpful.
-
-==================================================
-FINAL VERIFICATION
-==================================================
-
-Before packaging, run:
-
-npm run build
-
-npm run test
-
-npm run smoke
-
-Check:
-
-http://127.0.0.1:4141/health
-
-Check:
-
-http://127.0.0.1:4141/v1/models
-
-If authenticated, check:
-
-/v1/chat/completions
-
-Record test results in:
-
-BUILD_REPORT.md
-
-Include:
-
-- Node version
-- npm version
-- dependencies
-- build result
-- test result
-- authentication result
-- Microsoft API result
-- OpenAI compatibility result
-- known limitations
-
-==================================================
-FINAL DELIVERY
-==================================================
-
-Finally create:
-
-m365-copilot-openai-bridge.zip
-
-The ZIP must contain the complete project.
+m365-copilot-local-codex.zip
 
 Exclude:
 
-node_modules
+node_modules/
+
 .env
-token caches
-access tokens
-refresh tokens
-authentication caches
-logs containing sensitive data
+
+browser profiles
+
+cookies
+
+tokens
+
+authentication data
+
+logs containing source code
+
+diagnostic screenshots
+
+temporary transaction backups
+
+temporary test workspaces
 
 Include:
 
-source
-package.json
-package-lock.json
-README.md
-docs
+source code
+
+package files
+
 tests
+
+README
+
+SECURITY.md
+
 BUILD_REPORT.md
-BLOCKERS.md if applicable
 
-Use Windows PowerShell Compress-Archive or another locally available built-in archive mechanism.
+BLOCKERS.md
 
-Verify the ZIP exists and can be opened.
+VS Code extension source if built
 
-At the very end, give me ONLY:
+============================================================
+ZIP VERIFICATION
+============================================================
 
-1. Path to the ZIP
-2. Build status
-3. Authentication/API status
-4. Any blocker that requires administrator action
-5. Exact command to unzip/install/start it
+After creating the ZIP:
 
-Do not paste all source code into chat unless file creation is impossible.
+1. verify it exists
+2. list archive contents
+3. ensure required files exist
+4. ensure .env is NOT present
+5. ensure browser profile is NOT present
+6. ensure node_modules is NOT present
+7. ensure no token/cache file is present
+8. extract ZIP into a fresh temporary directory
+9. verify project structure
+10. run a basic build from the extracted copy where feasible
 
-Start now and complete the entire job.
+Do not declare final delivery before this verification.
+
+============================================================
+FINAL RESPONSE
+============================================================
+
+At the end give me ONLY:
+
+ZIP:
+<absolute path>
+
+BUILD:
+PASS / FAIL
+
+LOCAL TESTS:
+PASS / FAIL
+
+COPILOT BRIDGE:
+PASS / BLOCKED / FAIL
+
+END-TO-END AGENT:
+PASS / BLOCKED / FAIL
+
+BLOCKERS:
+<short list or NONE>
+
+START:
+<exact Windows commands>
+
+URL:
+http://127.0.0.1:4140
+
+Do not paste source code into chat.
+
+Do not provide a tutorial instead of the ZIP.
+
+Start building now.
